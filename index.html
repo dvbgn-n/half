@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halftone Machine — Image Halftone Editor</title>
+    <meta name="description" content="Transform your images into stunning halftone art with customizable parameters. Real-time preview with adjustable dot size, shape, angle, spacing, and colors.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app" id="app">
+
+        <!-- ============ Canvas Area ============ -->
+        <div class="canvas-area">
+            <div class="canvas-frame" id="canvasFrame">
+                <canvas id="halftoneCanvas"></canvas>
+                <div class="upload-overlay" id="uploadOverlay">
+                    <div class="upload-content">
+                        <svg class="upload-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+                            <path d="M24 32V8M24 8L16 16M24 8L32 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M8 28V36C8 38.2 9.8 40 12 40H36C38.2 40 40 38.2 40 36V28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <p class="upload-text">drop image here<br><span>or click to upload</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ Controls Panel ============ -->
+        <div class="controls-panel">
+            <div class="panel-inner">
+
+                <!-- Controls -->
+                <div class="controls-list">
+
+                    <!-- Threshold -->
+                    <div class="control-row">
+                        <label class="control-label">threshold</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="threshold" min="0" max="100" value="0" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Dot Size -->
+                    <div class="control-row">
+                        <label class="control-label">dot size</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="dotSize" min="1" max="50" value="12" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Spacing -->
+                    <div class="control-row">
+                        <label class="control-label">spacing</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="spacing" min="3" max="40" value="10" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Angle -->
+                    <div class="control-row">
+                        <label class="control-label">angle</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="angle" min="0" max="180" value="45" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Noise -->
+                    <div class="control-row">
+                        <label class="control-label">noise</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="noise" min="0" max="100" value="0" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Scale -->
+                    <div class="control-row">
+                        <label class="control-label">scale</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="scale" min="10" max="200" value="100" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Color 1 -->
+                    <div class="control-row control-row--color" id="color1Group">
+                        <label class="control-label">color 1</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider color-slider" id="color1" min="0" max="360" value="0" step="1" style="--thumb-hue: 0">
+                        </div>
+                    </div>
+
+                    <!-- Color 2 -->
+                    <div class="control-row control-row--color" id="color2Group">
+                        <label class="control-label">color 2</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider color-slider" id="color2" min="0" max="360" value="200" step="1" style="--thumb-hue: 200">
+                        </div>
+                    </div>
+
+                    <!-- Color Mode (Pill Buttons) -->
+                    <div class="control-row control-row--modes">
+                        <label class="control-label">color mode</label>
+                        <div class="pill-group" id="colorModeGroup">
+                            <label class="pill-label">
+                                <input type="radio" name="colorMode" value="classic" checked>
+                                <span class="pill-btn">classic</span>
+                            </label>
+                            <label class="pill-label">
+                                <input type="radio" name="colorMode" value="invert">
+                                <span class="pill-btn">invert</span>
+                            </label>
+                            <label class="pill-label">
+                                <input type="radio" name="colorMode" value="duotone">
+                                <span class="pill-btn">duotone</span>
+                            </label>
+                            <label class="pill-label">
+                                <input type="radio" name="colorMode" value="mono">
+                                <span class="pill-btn">mono</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Dot Shape (Pill Buttons with Icons) -->
+                    <div class="control-row control-row--modes">
+                        <label class="control-label">dot shape</label>
+                        <div class="pill-group" id="dotShapeGroup">
+                            <label class="pill-label pill-label--icon">
+                                <input type="radio" name="dotShape" value="0" checked>
+                                <span class="pill-btn"><img src="SVG/Group 9.svg" alt="Circle"></span>
+                            </label>
+                            <label class="pill-label pill-label--icon">
+                                <input type="radio" name="dotShape" value="1">
+                                <span class="pill-btn"><img src="SVG/Group 10.svg" alt="Square"></span>
+                            </label>
+                            <label class="pill-label pill-label--icon">
+                                <input type="radio" name="dotShape" value="2">
+                                <span class="pill-btn"><img src="SVG/Group 11.svg" alt="Diamond"></span>
+                            </label>
+                            <label class="pill-label pill-label--icon">
+                                <input type="radio" name="dotShape" value="3">
+                                <span class="pill-btn"><img src="SVG/Vector 1.svg" alt="Wave"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Animation Placeholder -->
+                <div class="animation-placeholder">
+                    <canvas id="animCanvas"></canvas>
+                </div>
+
+                <!-- Bottom Actions -->
+                <div class="bottom-actions">
+                    <button class="action-btn action-btn--record" id="btnRecord" title="Gravar Vídeo"></button>
+                    <button class="action-btn action-btn--load" id="btnUpload" title="Carregar Imagem">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                    </button>
+                    <button class="action-btn action-btn--export" id="btnExport" title="Exportar Imagem">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                    </button>
+                </div>
+
+                <!-- Logo SVG -->
+                <div class="logo-container">
+                    <img src="SVG/logo.svg" alt="Halftone Machine Logo" class="main-logo">
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="fileInput" accept="image/*" hidden>
+
+    <script src="app.js"></script>
+</body>
+</html>

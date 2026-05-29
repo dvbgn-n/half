@@ -1,0 +1,357 @@
+/* ============================================================
+   HALFTONE MACHINE — Styles V2
+   ============================================================ */
+
+:root {
+    --bg-app: #0e0e0e;
+    --bg-panel: #141414;
+    --bg-frame-outer: linear-gradient(160deg, #1c1c1c 0%, #111 100%);
+    --bg-canvas-empty: #0a0a0a;
+
+    --c-accent: #E50000; /* Vivid red from Figma */
+    --c-accent-glow: rgba(229, 0, 0, 0.4);
+
+    --c-text: #dddddd;
+    --c-text-dim: #bbbbbb;
+
+    --c-track-bg: transparent;
+    --c-track-border: #999999;
+    
+    --c-pill-bg: #d1c8c8;
+    --c-pill-border: #aaaaaa;
+
+    --radius-frame: 8px;
+    --radius-inner: 6px;
+    --radius-pill: 20px;
+
+    --font-ui: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+
+    --frame-bezel: 2px;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-app);
+    font-family: var(--font-ui);
+    color: var(--c-text);
+    -webkit-font-smoothing: antialiased;
+}
+
+.app {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    padding: 24px;
+    gap: 32px;
+}
+
+/* ============================================================
+   CANVAS AREA
+   ============================================================ */
+.canvas-area {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+}
+
+.canvas-frame {
+    position: relative;
+    flex: 1;
+    border-radius: var(--radius-frame);
+    padding: var(--frame-bezel);
+    background: #ffffff; /* White border from Figma */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+#halftoneCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: calc(var(--radius-frame) - var(--frame-bezel));
+    background: var(--bg-canvas-empty);
+}
+
+.upload-overlay {
+    position: absolute;
+    top: var(--frame-bezel);
+    left: var(--frame-bezel);
+    right: var(--frame-bezel);
+    bottom: var(--frame-bezel);
+    border-radius: calc(var(--radius-frame) - var(--frame-bezel));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+.upload-overlay:hover {
+    background: rgba(229, 0, 0, 0.15);
+}
+
+.upload-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(1.02);
+}
+
+.upload-content {
+    text-align: center;
+    color: #fff;
+}
+
+/* ============================================================
+   CONTROLS PANEL
+   ============================================================ */
+.controls-panel {
+    width: 380px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.controls-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.control-row {
+    display: grid;
+    grid-template-columns: 85px 1fr;
+    align-items: center;
+    gap: 12px;
+}
+
+.control-label {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--c-text);
+    user-select: none;
+}
+
+.slider-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 24px;
+}
+
+/* ============================================================
+   OUTLINE SLIDERS
+   ============================================================ */
+.slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    background: transparent;
+    outline: none;
+    cursor: pointer;
+}
+
+/* Track Webkit */
+.slider::-webkit-slider-runnable-track {
+    height: 8px;
+    background: var(--c-track-bg);
+    border: 1px solid var(--c-track-border);
+    border-radius: 4px;
+}
+
+/* Thumb Webkit */
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--c-accent);
+    margin-top: -7px; /* Center thumb on track */
+    border: none;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    transition: transform 0.1s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+/* Track Firefox */
+.slider::-moz-range-track {
+    height: 8px;
+    background: var(--c-track-bg);
+    border: 1px solid var(--c-track-border);
+    border-radius: 4px;
+}
+
+/* Thumb Firefox */
+.slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--c-accent);
+    border: none;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    transition: transform 0.1s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+    transform: scale(1.15);
+}
+
+/* Color Sliders (Disabled State) */
+.control-row--color.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* ============================================================
+   PILL BUTTONS (RADIO)
+   ============================================================ */
+.pill-group {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.pill-label {
+    cursor: pointer;
+    flex: 1;
+}
+
+.pill-label input[type="radio"] {
+    display: none;
+}
+
+.pill-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    border-radius: var(--radius-pill);
+    background: var(--c-pill-bg);
+    border: 1px solid var(--c-pill-border);
+    color: #111;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.pill-label:hover .pill-btn {
+    background: #e0dada;
+}
+
+/* Active State */
+.pill-label input[type="radio"]:checked + .pill-btn {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+    color: #fff;
+    box-shadow: 0 0 15px var(--c-accent-glow);
+}
+
+/* Icon Buttons specifically */
+.pill-label--icon .pill-btn img {
+    height: 12px;
+    filter: brightness(0); /* Make SVG black when inactive */
+    transition: filter 0.2s ease;
+}
+
+.pill-label--icon input[type="radio"]:checked + .pill-btn img {
+    filter: brightness(0) invert(1); /* Make SVG white when active */
+}
+
+/* ============================================================
+   ANIMATION PLACEHOLDER (Generative Canvas)
+   ============================================================ */
+.animation-placeholder {
+    width: 100%;
+    height: 120px;
+    background-color: #0a0a0a;
+    border-radius: 6px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);
+}
+
+#animCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ============================================================
+   BOTTOM ACTIONS
+   ============================================================ */
+.bottom-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-right: 8px;
+}
+
+.action-btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.action-btn:hover {
+    transform: scale(1.2);
+    filter: brightness(1.2);
+}
+
+.action-btn--record {
+    background: var(--c-accent);
+    box-shadow: 0 0 8px rgba(229, 0, 0, 0.4);
+}
+
+.action-btn--record.recording {
+    animation: pulseRecord 1s infinite alternate;
+}
+
+@keyframes pulseRecord {
+    0% { transform: scale(1); box-shadow: 0 0 8px rgba(229, 0, 0, 0.4); }
+    100% { transform: scale(1.2); box-shadow: 0 0 16px rgba(229, 0, 0, 0.8); }
+}
+
+/* ============================================================
+   LOGO
+   ============================================================ */
+.logo-container {
+    margin-top: auto;
+    width: 100%;
+}
+
+.main-logo {
+    width: 100%;
+    height: auto;
+    display: block;
+}
