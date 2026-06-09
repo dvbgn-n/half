@@ -9,6 +9,8 @@ const state = {
     previewWidth: 0,
     previewHeight: 0,
     params: {
+        brightness: 0,
+        contrast: 0,
         threshold: 0,
         dotSize: 12,
         dotShape: 0, // 0: circle, 1: square, 2: diamond, 3: wave
@@ -81,12 +83,17 @@ function setupEventListeners() {
     });
 
     // Sliders
-    const sliderIds = ['threshold', 'dotSize', 'angle', 'spacing', 'noise', 'scale', 'color1', 'color2'];
+    const sliderIds = ['brightness', 'contrast', 'threshold', 'dotSize', 'angle', 'spacing', 'noise', 'scale', 'color1', 'color2'];
     sliderIds.forEach(id => {
         const slider = document.getElementById(id);
         if (!slider) return;
         slider.addEventListener('input', () => {
             state.params[id] = parseFloat(slider.value);
+            if (id === 'brightness' || id === 'contrast') {
+                if (state.sourceImage) {
+                    processImage(state.sourceImage);
+                }
+            }
             requestRender();
         });
     });
@@ -125,10 +132,26 @@ function setupEventListeners() {
         }, 200);
     });
 
-    // Bottom Action Buttons
+    // Bottom Action Buttons & Export Menu
+    const btnExportMenu = document.getElementById('btnExportMenu');
+    const exportMenu = document.getElementById('exportMenu');
+
     document.getElementById('btnUpload').addEventListener('click', () => fileInput.click());
-    document.getElementById('btnExport').addEventListener('click', exportPNG);
     document.getElementById('btnRecord').addEventListener('click', toggleRecording);
+    
+    btnExportMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportMenu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => {
+        if (!exportMenu.classList.contains('hidden')) {
+            exportMenu.classList.add('hidden');
+        }
+    });
+
+    document.getElementById('btnExportPNG').addEventListener('click', exportPNG);
+    document.getElementById('btnExportSVG').addEventListener('click', exportSVG);
 
     // Shortcuts
     document.addEventListener('keydown', (e) => {
@@ -172,7 +195,18 @@ function processImage(img) {
 
     offCanvas.width = w;
     offCanvas.height = h;
+
+    // Apply pre-editing brightness and contrast
+    // Brightness slider is -100 to 100 -> maps to 0% to 200% (100% is normal)
+    // Contrast slider is -100 to 100 -> maps to 0% to 200% (100% is normal)
+    const filterBrightness = 100 + state.params.brightness;
+    const filterContrast = 100 + state.params.contrast;
+    offCtx.filter = `brightness(${filterBrightness}%) contrast(${filterContrast}%)`;
+
     offCtx.drawImage(img, 0, 0, w, h);
+    
+    // Reset filter
+    offCtx.filter = 'none';
 
     state.previewData = offCtx.getImageData(0, 0, w, h);
     state.previewWidth = w;
@@ -371,6 +405,167 @@ function exportPNG() {
     link.download = `${state.fileName || 'halftone'}-export.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
+}
+
+// ============================================================
+// SVG EXPORT PIPELINE
+// ============================================================
+function exportSVG() {
+    if (!state.previewData) return;
+
+    const {
+        threshold, dotSize, dotShape, angle,
+        spacing, noise, scale, colorMode, color1, color2
+    } = state.params;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const srcW = state.previewWidth;
+    const srcH = state.previewHeight;
+    const srcData = state.previewData.data;
+
+    const ox = Math.floor((w - srcW) / 2);
+    const oy = Math.floor((h - srcH) / 2);
+
+    let dotColor, bgColor;
+    const isInvert = colorMode === 'invert';
+
+    switch (colorMode) {
+        case 'classic': dotColor = '#000000'; bgColor = '#ffffff'; break;
+        case 'invert': dotColor = '#ffffff'; bgColor = '#000000'; break;
+        case 'duotone': 
+            dotColor = `hsl(${color1}, 85%, 40%)`; 
+            bgColor = `hsl(${color2}, 55%, 88%)`; 
+            break;
+        case 'mono': 
+            dotColor = `hsl(${color1}, 80%, 28%)`; 
+            bgColor = `hsl(${color1}, 20%, 92%)`; 
+            break;
+    }
+
+    const angleRad = angle * Math.PI / 180;
+    const scaleFactor = scale / 100;
+    const maxRadius = dotSize * scaleFactor;
+    const effectiveSpacing = Math.max(2, spacing);
+    const noiseAmount = noise / 100;
+    const thresholdVal = threshold * 2.55;
+
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+    const diagonal = Math.sqrt(w * w + h * h);
+    const numCols = Math.ceil(diagonal / effectiveSpacing) + 2;
+    const numRows = Math.ceil(diagonal / effectiveSpacing) + 2;
+    const halfCols = Math.ceil(numCols / 2);
+    const halfRows = Math.ceil(numRows / 2);
+    const centerX = w / 2;
+    const centerY = h / 2;
+
+    let svgData = `<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+<rect width="100%" height="100%" fill="${bgColor}" />
+<g fill="${dotColor}">
+`;
+
+    function toStr(val) { return parseFloat(val.toFixed(3)); }
+
+    if (dotShape === 3) {
+        // SVG Wave Path logic
+        for (let row = -halfRows; row < halfRows; row++) {
+            const gy = row * effectiveSpacing;
+            let pathD = "";
+            let isDrawing = false;
+            let currentRadius = 0;
+            
+            for (let col = -halfCols * effectiveSpacing; col < halfCols * effectiveSpacing; col += 2) {
+                const gx = col;
+                const waveOffset = Math.sin(gx * 0.05) * (effectiveSpacing * 0.4);
+                const finalGy = gy + waveOffset;
+
+                const cx = gx * cos - finalGy * sin + centerX;
+                const cy = gx * sin + finalGy * cos + centerY;
+
+                if (cx < -maxRadius || cx > w + maxRadius || cy < -maxRadius || cy > h + maxRadius) continue;
+
+                const sx = Math.floor(cx - ox);
+                const sy = Math.floor(cy - oy);
+                if (sx < 0 || sx >= srcW || sy < 0 || sy >= srcH) continue;
+
+                const idx = (sy * srcW + sx) * 4;
+                const brightness = srcData[idx] * 0.299 + srcData[idx + 1] * 0.587 + srcData[idx + 2] * 0.114;
+
+                if (isInvert ? brightness < thresholdVal : brightness > 255 - thresholdVal) {
+                    if (isDrawing) { pathD += ` A ${toStr(currentRadius)} ${toStr(currentRadius)} 0 0 1 ${toStr(cx)} ${toStr(cy)}`; isDrawing = false; }
+                    continue;
+                }
+
+                let radius = isInvert ? (brightness / 255) * maxRadius : ((255 - brightness) / 255) * maxRadius;
+                if (noiseAmount > 0) radius *= 1 + (stableRandom(col, row) - 0.5) * noiseAmount * 2;
+
+                if (radius < 0.4) {
+                    if (isDrawing) { pathD += ` A ${toStr(currentRadius)} ${toStr(currentRadius)} 0 0 1 ${toStr(cx)} ${toStr(cy)}`; isDrawing = false; }
+                    continue;
+                }
+
+                if (!isDrawing) {
+                    pathD += ` M ${toStr(cx)} ${toStr(cy - radius)}`;
+                    isDrawing = true;
+                } else {
+                    pathD += ` L ${toStr(cx)} ${toStr(cy - radius)} A ${toStr(radius)} ${toStr(radius)} 0 0 1 ${toStr(cx)} ${toStr(cy + radius)}`;
+                }
+                currentRadius = radius;
+            }
+            if (pathD) {
+                svgData += `<path d="${pathD}" stroke="${dotColor}" stroke-width="1" fill="none" />\n`;
+            }
+        }
+    } else {
+        // Shapes 0, 1, 2
+        for (let row = -halfRows; row < halfRows; row++) {
+            for (let col = -halfCols; col < halfCols; col++) {
+                const gx = col * effectiveSpacing;
+                const gy = row * effectiveSpacing;
+
+                const cx = gx * cos - gy * sin + centerX;
+                const cy = gx * sin + gy * cos + centerY;
+
+                if (cx < -maxRadius || cx > w + maxRadius || cy < -maxRadius || cy > h + maxRadius) continue;
+
+                const sx = Math.floor(cx - ox);
+                const sy = Math.floor(cy - oy);
+                if (sx < 0 || sx >= srcW || sy < 0 || sy >= srcH) continue;
+
+                const idx = (sy * srcW + sx) * 4;
+                const brightness = srcData[idx] * 0.299 + srcData[idx + 1] * 0.587 + srcData[idx + 2] * 0.114;
+
+                if (isInvert ? brightness < thresholdVal : brightness > 255 - thresholdVal) continue;
+
+                let radius = isInvert ? (brightness / 255) * maxRadius : ((255 - brightness) / 255) * maxRadius;
+                if (noiseAmount > 0) radius *= 1 + (stableRandom(col, row) - 0.5) * noiseAmount * 2;
+
+                if (radius < 0.4) continue;
+
+                if (dotShape === 0) { // Circle
+                    svgData += `<circle cx="${toStr(cx)}" cy="${toStr(cy)}" r="${toStr(radius)}" />\n`;
+                } else if (dotShape === 1) { // Square
+                    svgData += `<rect x="${toStr(cx - radius)}" y="${toStr(cy - radius)}" width="${toStr(radius * 2)}" height="${toStr(radius * 2)}" transform="rotate(${angle} ${toStr(cx)} ${toStr(cy)})" />\n`;
+                } else if (dotShape === 2) { // Diamond
+                    // A simple diamond can be a polygon
+                    const r = radius * 1.2;
+                    svgData += `<polygon points="${toStr(cx)},${toStr(cy - r)} ${toStr(cx + r)},${toStr(cy)} ${toStr(cx)},${toStr(cy + r)} ${toStr(cx - r)},${toStr(cy)}" transform="rotate(${angle} ${toStr(cx)} ${toStr(cy)})" />\n`;
+                }
+            }
+        }
+    }
+
+    svgData += `</g>\n</svg>`;
+
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = `${state.fileName || 'halftone'}-export.svg`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
 }
 
 // ============================================================

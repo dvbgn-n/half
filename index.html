@@ -36,6 +36,22 @@
                 <!-- Controls -->
                 <div class="controls-list">
 
+                    <!-- Pre-editing: Brightness -->
+                    <div class="control-row">
+                        <label class="control-label">brightness</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="brightness" min="-100" max="100" value="0" step="1">
+                        </div>
+                    </div>
+
+                    <!-- Pre-editing: Contrast -->
+                    <div class="control-row">
+                        <label class="control-label">contrast</label>
+                        <div class="slider-wrap">
+                            <input type="range" class="slider" id="contrast" min="-100" max="100" value="0" step="1">
+                        </div>
+                    </div>
+
                     <!-- Threshold -->
                     <div class="control-row">
                         <label class="control-label">threshold</label>
@@ -159,9 +175,16 @@
                     <button class="action-btn action-btn--load" id="btnUpload" title="Carregar Imagem">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
                     </button>
-                    <button class="action-btn action-btn--export" id="btnExport" title="Exportar Imagem">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
-                    </button>
+                    
+                    <div class="export-wrapper">
+                        <button class="action-btn action-btn--export" id="btnExportMenu" title="Exportar">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                        </button>
+                        <div class="export-menu hidden" id="exportMenu">
+                            <button class="export-option" id="btnExportSVG">Vector (SVG)</button>
+                            <button class="export-option" id="btnExportPNG">Image (PNG)</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Logo SVG -->
