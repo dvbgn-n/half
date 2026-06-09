@@ -431,94 +431,402 @@ function toggleRecording() {
 }
 
 // ============================================================
-// GENERATIVE ANIMATION LOOP
+// CRT PIXEL ANIMATION ENGINE
 // ============================================================
-let animConfig = {
-    color: '#E50000',
-    spacing: 16,
-    speed: 0.03,
-    sizeMultX: 0.1,
-    sizeMultY: 0.1,
-    sizeTimeMult: 0.5,
-    morphSpeed: 0.8,
-    jitterX: 2,
-    jitterY: 2,
-    jitterSpeed: 2
-};
+const PIXEL_SIZE = 4; // Each "pixel" is 4x4 real pixels
+let currentScene = 0;
+let animTime = 0;
+let sceneData = {};
 
-function randomizeAnim() {
-    const colors = ['#E50000', '#ffffff', '#aaaaaa', '#ff3333'];
-    animConfig.color = colors[Math.floor(Math.random() * colors.length)];
-    animConfig.spacing = Math.floor(Math.random() * 16) + 8; // 8 to 24
-    animConfig.speed = (Math.random() * 0.04) + 0.01;
-    animConfig.sizeMultX = Math.random() * 0.3;
-    animConfig.sizeMultY = Math.random() * 0.3;
-    animConfig.sizeTimeMult = Math.random();
-    animConfig.morphSpeed = Math.random() * 2;
-    animConfig.jitterX = Math.random() * 4;
-    animConfig.jitterY = Math.random() * 4;
-    animConfig.jitterSpeed = Math.random() * 3 + 1;
+// GIF playback state
+let gifMode = false;
+let gifFrames = [];
+let gifCurrentFrame = 0;
+let gifFrameTicks = 0;
+let gifElement = null; // legacy
+const gifOffCanvas = document.createElement('canvas');
+const gifOffCtx = gifOffCanvas.getContext('2d');
+
+function nextScene() {
+    gifMode = false;
+    gifFrames = [];
+    currentScene = Math.floor(Math.random() * 8);
+    animTime = 0;
+    sceneData = {};
+    initScene();
+}
+
+async function loadGifToAnim(file) {
+    if (!('ImageDecoder' in window)) {
+        alert("Seu navegador não suporta a decodificação nativa de GIFs (ImageDecoder). Tente usar o Google Chrome ou Edge mais recentes.");
+        return;
+    }
+    
+    try {
+        const decoder = new ImageDecoder({ data: file.stream(), type: 'image/gif' });
+        await decoder.tracks.ready;
+        const track = decoder.tracks.selectedTrack;
+        
+        gifFrames = [];
+        gifCurrentFrame = 0;
+        gifFrameTicks = 0;
+        gifMode = true; // start playing immediately
+        
+        // Decode all frames into memory
+        for (let i = 0; i < track.frameCount; i++) {
+            const result = await decoder.decode({ frameIndex: i });
+            gifFrames.push(result.image); // stores the VideoFrame
+        }
+    } catch (e) {
+        console.error("Failed to decode GIF", e);
+    }
+}
+
+function initScene() {
+    if (!animCanvas) return;
+    const cols = Math.floor(animCanvas.width / PIXEL_SIZE);
+    const rows = Math.floor(animCanvas.height / PIXEL_SIZE);
+
+    switch (currentScene) {
+        case 0: // Matrix Rain
+            sceneData.drops = [];
+            for (let i = 0; i < cols; i++) {
+                sceneData.drops.push({
+                    y: Math.random() * rows * -1,
+                    speed: Math.random() * 1.5 + 0.5,
+                    len: Math.floor(Math.random() * 10) + 4
+                });
+            }
+            break;
+        case 1: // Game of Life
+            sceneData.grid = [];
+            for (let i = 0; i < cols * rows; i++) {
+                sceneData.grid.push(Math.random() > 0.7 ? 1 : 0);
+            }
+            sceneData.tick = 0;
+            break;
+        case 2: // Plasma
+            break;
+        case 3: // Bouncing Lines
+            sceneData.lines = [];
+            for (let i = 0; i < 6; i++) {
+                sceneData.lines.push({
+                    y: Math.random() * rows,
+                    dy: (Math.random() - 0.5) * 2,
+                    thick: Math.floor(Math.random() * 3) + 1
+                });
+            }
+            break;
+        case 4: // Expanding Circles
+            sceneData.circles = [];
+            for (let i = 0; i < 5; i++) {
+                sceneData.circles.push({
+                    cx: Math.floor(Math.random() * cols),
+                    cy: Math.floor(Math.random() * rows),
+                    r: 0, maxR: Math.random() * 30 + 10,
+                    speed: Math.random() * 0.5 + 0.2
+                });
+            }
+            break;
+        case 5: // Static Noise TV
+            break;
+        case 6: // Snake / Worm
+            sceneData.worms = [];
+            for (let i = 0; i < 4; i++) {
+                const trail = [];
+                let wx = Math.floor(Math.random() * cols);
+                let wy = Math.floor(Math.random() * rows);
+                for (let t = 0; t < 20; t++) trail.push({x: wx, y: wy});
+                sceneData.worms.push({ trail, dx: 1, dy: 0 });
+            }
+            break;
+        case 7: // Sine Wave Stack
+            sceneData.waveCount = Math.floor(Math.random() * 5) + 3;
+            sceneData.waveFreqs = [];
+            for (let i = 0; i < sceneData.waveCount; i++) {
+                sceneData.waveFreqs.push(Math.random() * 0.15 + 0.03);
+            }
+            break;
+    }
+}
+
+function drawPixel(x, y, brightness) {
+    // brightness 0–1, rendered as green CRT shades
+    const g = Math.floor(brightness * 255);
+    animCtx.fillStyle = `rgb(${Math.floor(g*0.15)}, ${g}, ${Math.floor(g*0.1)})`;
+    animCtx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
 }
 
 function startGenerativeAnimation() {
-    let time = 0;
-    
-    // Make canvas clickable
-    if (animCanvas) {
-        animCanvas.style.cursor = 'pointer';
-        animCanvas.addEventListener('click', randomizeAnim);
-    }
-    
+    if (!animCanvas || !animCtx) return;
+
+    animCanvas.style.cursor = 'pointer';
+    animCanvas.addEventListener('click', nextScene);
+
+    // Drag & Drop GIF onto animation area
+    animCanvas.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    animCanvas.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = e.dataTransfer.files[0];
+        if (file && (file.type === 'image/gif' || file.type.startsWith('image/'))) {
+            loadGifToAnim(file);
+        }
+    });
+
+    initScene();
+
     function animLoop() {
-        if (!animCtx) return;
-        
         const w = animCanvas.width;
         const h = animCanvas.height;
-        
-        // Clear background with slight fade for trails
-        animCtx.fillStyle = 'rgba(10, 10, 10, 0.4)';
+        const cols = Math.floor(w / PIXEL_SIZE);
+        const rows = Math.floor(h / PIXEL_SIZE);
+
+        // CRT black background
+        animCtx.fillStyle = '#020a02';
         animCtx.fillRect(0, 0, w, h);
-        
-        const spacing = animConfig.spacing;
-        const cols = Math.ceil(w / spacing);
-        const rows = Math.ceil(h / spacing);
-        
-        time += animConfig.speed;
-        
-        animCtx.fillStyle = animConfig.color;
-        
-        for (let i = 0; i < cols; i++) {
-            for (let j = 0; j < rows; j++) {
-                const x = i * spacing + spacing / 2;
-                const y = j * spacing + spacing / 2;
-                
-                const distToCenter = Math.sqrt(Math.pow(x - w/2, 2) + Math.pow(y - h/2, 2));
-                
-                // Size oscillates based on config
-                const sizePhase = Math.sin(time + i * animConfig.sizeMultX + j * animConfig.sizeMultY) * Math.cos(time * animConfig.sizeTimeMult + distToCenter * 0.01);
-                const maxSize = spacing * 0.9;
-                let currentSize = Math.abs(sizePhase) * maxSize;
-                
-                if (currentSize < 1) continue;
-                
-                // Morphing shape
-                const morphPhase = (Math.sin(time * animConfig.morphSpeed + distToCenter * 0.02) + 1) / 2;
-                const radius = (currentSize / 2) * morphPhase;
-                
-                // Movement jitter
-                const offsetX = Math.sin(time * animConfig.jitterSpeed + j * 0.5) * animConfig.jitterX;
-                const offsetY = Math.cos(time * animConfig.jitterSpeed + i * 0.5) * animConfig.jitterY;
-                
-                animCtx.beginPath();
-                animCtx.roundRect(x - currentSize/2 + offsetX, y - currentSize/2 + offsetY, currentSize, currentSize, radius);
-                animCtx.fill();
+
+        animTime += 1;
+
+        if (gifMode && gifFrames.length > 0) {
+            renderGifCRT(cols, rows);
+        } else {
+            switch (currentScene) {
+                case 0: renderMatrixRain(cols, rows); break;
+                case 1: renderGameOfLife(cols, rows); break;
+                case 2: renderPlasma(cols, rows); break;
+                case 3: renderBouncingLines(cols, rows); break;
+                case 4: renderExpandingCircles(cols, rows); break;
+                case 5: renderStaticNoise(cols, rows); break;
+                case 6: renderWorms(cols, rows); break;
+                case 7: renderSineWaves(cols, rows); break;
             }
         }
-        
+
+        // Scanlines overlay
+        animCtx.fillStyle = 'rgba(0,0,0,0.12)';
+        for (let y = 0; y < h; y += 2) {
+            animCtx.fillRect(0, y, w, 1);
+        }
+
         requestAnimationFrame(animLoop);
     }
-    
+
     animLoop();
+}
+
+// --- SCENE 0: Matrix Rain ---
+function renderMatrixRain(cols, rows) {
+    const drops = sceneData.drops;
+    if (!drops) return;
+    for (let i = 0; i < cols; i++) {
+        const d = drops[i];
+        d.y += d.speed;
+        if (d.y > rows + d.len) {
+            d.y = -d.len;
+            d.speed = Math.random() * 1.5 + 0.5;
+        }
+        for (let t = 0; t < d.len; t++) {
+            const py = Math.floor(d.y - t);
+            if (py >= 0 && py < rows) {
+                const brightness = t === 0 ? 1.0 : (1 - t / d.len) * 0.7;
+                drawPixel(i, py, brightness);
+            }
+        }
+    }
+}
+
+// --- SCENE 1: Game of Life ---
+function renderGameOfLife(cols, rows) {
+    const grid = sceneData.grid;
+    if (!grid) return;
+    sceneData.tick++;
+
+    // Evolve every 6 frames
+    if (sceneData.tick % 6 === 0) {
+        const next = new Array(cols * rows).fill(0);
+        for (let x = 0; x < cols; x++) {
+            for (let y = 0; y < rows; y++) {
+                let neighbors = 0;
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = (x + dx + cols) % cols;
+                        const ny = (y + dy + rows) % rows;
+                        neighbors += grid[ny * cols + nx];
+                    }
+                }
+                const idx = y * cols + x;
+                if (grid[idx] === 1) {
+                    next[idx] = (neighbors === 2 || neighbors === 3) ? 1 : 0;
+                } else {
+                    next[idx] = (neighbors === 3) ? 1 : 0;
+                }
+            }
+        }
+        sceneData.grid = next;
+    }
+
+    const g = sceneData.grid;
+    for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+            if (g[y * cols + x]) drawPixel(x, y, 0.85);
+        }
+    }
+}
+
+// --- SCENE 2: Plasma ---
+function renderPlasma(cols, rows) {
+    const t = animTime * 0.04;
+    for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+            const v1 = Math.sin(x * 0.15 + t);
+            const v2 = Math.sin(y * 0.12 + t * 0.7);
+            const v3 = Math.sin((x + y) * 0.1 + t * 0.5);
+            const v4 = Math.sin(Math.sqrt(x*x + y*y) * 0.1 - t);
+            const v = (v1 + v2 + v3 + v4 + 4) / 8;
+            if (v > 0.25) drawPixel(x, y, v);
+        }
+    }
+}
+
+// --- SCENE 3: Bouncing Lines ---
+function renderBouncingLines(cols, rows) {
+    const lines = sceneData.lines;
+    if (!lines) return;
+    for (const line of lines) {
+        line.y += line.dy;
+        if (line.y <= 0 || line.y >= rows - 1) line.dy *= -1;
+        for (let x = 0; x < cols; x++) {
+            const wave = Math.sin(x * 0.08 + animTime * 0.05) * 3;
+            for (let t = 0; t < line.thick; t++) {
+                const py = Math.floor(line.y + wave + t);
+                if (py >= 0 && py < rows) drawPixel(x, py, 0.9);
+            }
+        }
+    }
+}
+
+// --- SCENE 4: Expanding Circles ---
+function renderExpandingCircles(cols, rows) {
+    const circles = sceneData.circles;
+    if (!circles) return;
+    for (const c of circles) {
+        c.r += c.speed;
+        if (c.r > c.maxR) {
+            c.r = 0;
+            c.cx = Math.floor(Math.random() * cols);
+            c.cy = Math.floor(Math.random() * rows);
+            c.maxR = Math.random() * 30 + 10;
+        }
+        // Draw ring
+        const rInt = Math.floor(c.r);
+        for (let x = 0; x < cols; x++) {
+            for (let y = 0; y < rows; y++) {
+                const dist = Math.sqrt((x - c.cx) ** 2 + (y - c.cy) ** 2);
+                if (Math.abs(dist - rInt) < 1.2) {
+                    drawPixel(x, y, 1 - c.r / c.maxR);
+                }
+            }
+        }
+    }
+}
+
+// --- SCENE 5: Static Noise (TV) ---
+function renderStaticNoise(cols, rows) {
+    for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+            if (Math.random() > 0.55) {
+                drawPixel(x, y, Math.random() * 0.8);
+            }
+        }
+    }
+}
+
+// --- SCENE 6: Worms ---
+function renderWorms(cols, rows) {
+    const worms = sceneData.worms;
+    if (!worms) return;
+    for (const worm of worms) {
+        // Random turn
+        if (Math.random() < 0.15) {
+            const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+            const d = dirs[Math.floor(Math.random() * 4)];
+            worm.dx = d.dx; worm.dy = d.dy;
+        }
+        const head = worm.trail[0];
+        const nx = (head.x + worm.dx + cols) % cols;
+        const ny = (head.y + worm.dy + rows) % rows;
+        worm.trail.unshift({x: nx, y: ny});
+        if (worm.trail.length > 25) worm.trail.pop();
+
+        for (let i = 0; i < worm.trail.length; i++) {
+            const p = worm.trail[i];
+            drawPixel(p.x, p.y, 1 - i / worm.trail.length);
+        }
+    }
+}
+
+// --- SCENE 7: Sine Waves ---
+function renderSineWaves(cols, rows) {
+    const wc = sceneData.waveCount || 3;
+    const freqs = sceneData.waveFreqs || [0.05, 0.08, 0.12];
+    const t = animTime * 0.04;
+    const mid = rows / 2;
+    for (let w = 0; w < wc; w++) {
+        const amp = (rows * 0.3) / wc;
+        const offset = (w - wc / 2) * (rows / (wc + 1));
+        for (let x = 0; x < cols; x++) {
+            const y = Math.floor(mid + offset + Math.sin(x * freqs[w] + t + w * 2) * amp);
+            if (y >= 0 && y < rows) drawPixel(x, y, 0.9 - w * 0.1);
+            if (y + 1 >= 0 && y + 1 < rows) drawPixel(x, y + 1, 0.4);
+        }
+    }
+}
+
+// --- GIF as CRT Pixels ---
+function renderGifCRT(cols, rows) {
+    if (!gifFrames || gifFrames.length === 0) return;
+
+    gifFrameTicks++;
+    if (gifFrameTicks > 3) { // Control playback speed (update every 4 frames)
+        gifFrameTicks = 0;
+        gifCurrentFrame = (gifCurrentFrame + 1) % gifFrames.length;
+    }
+    
+    const frame = gifFrames[gifCurrentFrame];
+
+    // Draw current GIF frame into offscreen canvas at low res
+    gifOffCanvas.width = cols;
+    gifOffCanvas.height = rows;
+    gifOffCtx.drawImage(frame, 0, 0, cols, rows);
+
+    let data;
+    try {
+        data = gifOffCtx.getImageData(0, 0, cols, rows).data;
+    } catch(e) {
+        return; // CORS or tainting
+    }
+
+    for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+            const idx = (y * cols + x) * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
+            if (a < 30) continue;
+
+            // Convert to luminance
+            const luma = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+            if (luma < 0.05) continue;
+
+            drawPixel(x, y, luma);
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', init);
